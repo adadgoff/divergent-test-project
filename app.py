@@ -1,15 +1,26 @@
+import json
+import os.path
+
 from flask import Flask, jsonify, abort
-from typing import Tuple
 
 app = Flask(__name__)
 
 
-def data_loader() -> Tuple[dict, dict]:
+def data_loader() -> tuple[list, list]:
     """
-    Функция загружает данные из json файлов и преобразует их в dict.
+    Функция загружает данные из json файлов и преобразует их в list.
     Функция не должна нарушать изначальную структуру данных.
     """
-    return {}, {}
+    base_path = os.path.dirname(__file__)
+    comments_path = os.path.join(base_path, "data", "comments.json")
+    posts_path = os.path.join(base_path, "data", "posts.json")
+
+    with (open(comments_path, mode="r", encoding="utf-8") as comments_f,
+          open(posts_path, mode="r", encoding="utf-8") as posts_f):
+        comments = json.load(comments_f)
+        posts = json.load(posts_f)
+
+    return posts["posts"], comments["comments"]
 
 
 @app.route("/")
@@ -35,7 +46,19 @@ def get_posts():
     Порядок ключей словаря в ответе не важен
     """
     posts, comments = data_loader()
-    output = {"body": "Social posts"}
+
+    output_posts = [
+        {
+            **post,
+            "comments_count": sum(comment["post_id"] == post["id"] for comment in comments),
+        }
+        for post in posts
+    ]
+
+    output = {
+        "posts": output_posts,
+        "total_results": len(output_posts),
+    }
 
     return jsonify(output)
 
@@ -66,6 +89,14 @@ def get_post(post_id):
     Порядок ключей словаря в ответе не важен
     """
     posts, comments = data_loader()
-    output = {"body": "Post: %d" % post_id}
+
+    output_post = next((post for post in posts if post["id"] == post_id), None)
+
+    if not output_post:
+        abort(status=404)
+
+    output_post["comments"] = [comment for comment in comments if comment["post_id"] == post_id]
+
+    output = {"post": output_post}
 
     return jsonify(output)
